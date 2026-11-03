@@ -1,0 +1,29 @@
+[project]
+name = "crosspost-bot"
+version = "1.1.0"
+description = "Telegram-бот мультирассылки постов в Telegram, MAX и WhatsApp"
+license = "MIT"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF", "SIM"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+# в тестах ожидание статуса в БД опросом — нормально
+"tests/*" = ["ASYNC109", "ASYNC110"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

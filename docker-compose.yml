@@ -1,0 +1,89 @@
+# Стек: bot (всегда) + evolution-api и postgres (профиль "evolution").
+#   С Evolution API:   docker compose --profile evolution up -d --build
+#   Только GREEN-API:  docker compose up -d --build
+name: broadcast-bot
+
+services:
+  bot:
+    build: .
+    image: broadcast-bot:latest
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DB_PATH: /data/bot.sqlite3
+    volumes:
+      - ./data:/data
+    stop_grace_period: 45s
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  evolution-api:
+    # Проверено: тег v2.3.7 содержит linux/amd64 и linux/arm64 (см. README).
+    image: evoapicloud/evolution-api:v2.3.7
+    profiles: ["evolution"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Наружу не публикуется: только 127.0.0.1 (веб-менеджер через SSH-туннель).
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: "8080"
+      SERVER_URL: http://localhost:8080
+      TZ: ${TZ:-Europe/Moscow}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER:-evolution}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-evolution}?schema=evolution_api
+      DATABASE_CONNECTION_CLIENT_NAME: broadcast_bot
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      DEL_INSTANCE: "false"
+      WEBSOCKET_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      TELEMETRY_ENABLED: "false"
+      CONFIG_SESSION_PHONE_CLIENT: Broadcast Bot
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      QRCODE_LIMIT: "30"
+      LOG_LEVEL: ERROR,WARN,INFO
+      LOG_BAILEYS: error
+      LANGUAGE: en
+    volumes:
+      - evolution_instances:/evolution/instances
+    logging: *logging
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["evolution"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-evolution}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-evolution}
+      TZ: ${TZ:-Europe/Moscow}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+volumes:
+  pgdata:
+  evolution_instances:
